@@ -37,7 +37,7 @@ glibc, pam, `PasswordAuthentication no`, openbsd, freebsd, macos: not affected. 
 
 ## reproduce it
 
-you need docker. this builds a normal alpine 3.24 with `openssh-server` and the default config. `alice` has `*`, `bob` has a real password.
+you need docker. this checkout defaults to `alpine:latest` (override `BASE` to test another musl-based Alpine image), but deliberately installs Alpine's official pre-fix `openssh` `10.3_p1-r1` APKs by URL and SHA-256. It otherwise uses the stock server and default config; Alpine documents the relevant defaults and fixed package versions in its [security advisory](https://alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/). `alice` has `*`, `bob` has a real password. The vulnerable behavior comes from the pinned OpenSSH packages: a normal `apk add openssh-server` uses the live Alpine package index and selects the fixed package instead.
 
 ```
 cd poc
@@ -75,7 +75,7 @@ for older alpine versions: `docker build --build-arg BASE=alpine:3.21 -t sshhole
 
 ## patch
 
-[`patch/4353fdc43-avoid-password-authn-bypass.patch`](patch/4353fdc43-avoid-password-authn-bypass.patch) is the upstream fix, unchanged, in case you need to apply it to an older version. it works on anything from 7.3p1 up. it makes sshd skip the comparison when the stored field is too short to be a real hash, and it also stops using a pointer into libc's static buffer.
+[`patch/4353fdc43-avoid-password-authn-bypass.patch`](patch/4353fdc43-avoid-password-authn-bypass.patch) is the upstream fix, unchanged, in case you need to apply it to an older version. The authoritative upstream source is OpenSSH commit [`4353fdc43ef646c43a8dda7025cc1a898caf1482`](https://github.com/openssh/openssh-portable/commit/4353fdc43ef646c43a8dda7025cc1a898caf1482); Alpine's [security advisory](https://alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/) identifies the fixed package versions. It works on anything from 7.3p1 up. It makes sshd skip the comparison when the stored field is too short to be a real hash, and it also stops using a pointer into libc's static buffer.
 
 if you can't update right now, set `PasswordAuthentication no` in `sshd_config`. that closes it completely.
 
