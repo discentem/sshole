@@ -6,6 +6,9 @@ set -eu
 NAME=sshole-poc
 PORT=2222
 EXPECT_PKG='openssh-server-10.3_p1-r1'
+# override the Alpine base to test another musl-based image, e.g.:
+#   BASE=alpine:3.21 ./repro.sh
+BASE=${BASE:-alpine:latest}
 
 # 1. kill anything already using this name OR this published port, by
 #    container ID (not just name) so a renamed/retagged leftover can't hide.
@@ -22,7 +25,7 @@ done
 
 # 2. rebuild fresh (forces linux/amd64 since this Dockerfile has no platform
 #    pin and defaults to the host arch, which fails on arm64 — see README).
-podman build --platform=linux/amd64 -t "$NAME" .
+podman build --platform=linux/amd64 --build-arg BASE="$BASE" -t "$NAME" .
 
 # 3. run it
 podman run -d --rm --platform=linux/amd64 --name "$NAME" \
